@@ -9,6 +9,7 @@ ecoflow:
     email: ${ECOFLOW_USERNAME}
     password: ${ECOFLOW_PASSWORD}
   offlineTimeout: PT1m
+  offgridTimeout: PT1m
   devices: ${ECOFLOW_DEVICES}
 
 httpClient:

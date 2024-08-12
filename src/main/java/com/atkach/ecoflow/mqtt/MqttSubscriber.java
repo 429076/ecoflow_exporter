@@ -110,6 +110,21 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
                         1);
             }
         });
+
+        metricsCache.forEach((key, value) -> {
+            if ("ecoflow_inv_ac_in_vol".equals(key.getName())) {
+                if (Duration.between(value.getLastUpdateTime(), LocalDateTime.now())
+                        .compareTo(ecoflowProperties.getOffgridTimeout()) > 0) {
+                    setGaugeValue("ecoflow_offgrid",
+                            key.getTags(),
+                            1);
+                } else {
+                    setGaugeValue("ecoflow_offgrid",
+                            key.getTags(),
+                            0);
+                }
+            }
+        });
     }
 
     private void setGaugeValue(String metricName, Tags tags, double value) {
