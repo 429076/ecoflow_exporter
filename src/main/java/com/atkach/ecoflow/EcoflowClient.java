@@ -180,6 +180,7 @@ public class EcoflowClient {
 
     public void reset(MqttCallbackExtended mqttCallback) throws MqttException, IOException {
         disconnect();
+        mqttClient.close();
         initMqttClient(true);
         mqttClient.setCallback(mqttCallback);
         mqttClient.connect();
