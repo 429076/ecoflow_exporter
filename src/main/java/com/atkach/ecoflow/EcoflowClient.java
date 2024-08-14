@@ -85,14 +85,14 @@ public class EcoflowClient {
                 requestEntity, AppCertificateResponse.class).getBody();
     }
 
-    protected MqttCredentials fetchMqttCredentials() throws IOException {
+    protected MqttCredentials fetchMqttCredentials(boolean reset) throws IOException {
         Path filePath = Paths.get(ecoflowProperties.getData(), APP_CERT_RESPONSE_FILE);
 
         AppCertificateResponse appCertificationResponse;
 
-        var loginResponse = login(false);
+        var loginResponse = login(reset);
 
-        if (Files.exists(filePath)) {
+        if (Files.exists(filePath) && !reset) {
             log.info("Found persisted application certification file");
             String content = Files.readString(filePath);
             appCertificationResponse = objectMapper.readValue(content, AppCertificateResponse.class);
@@ -124,7 +124,7 @@ public class EcoflowClient {
                 .build();
     }
 
-    protected void initMqttClient() throws MqttException, IOException {
+    protected void initMqttClient(boolean reset) throws MqttException, IOException {
         File dataFolder = new File(ecoflowProperties.getData());
 
         if (!dataFolder.exists()) {
@@ -137,13 +137,13 @@ public class EcoflowClient {
         Path filePath = Paths.get(ecoflowProperties.getData(), MQTT_CREDENTIALS_FILE);
         MqttCredentials credentials;
 
-        if (Files.exists(filePath)) {
+        if (Files.exists(filePath) && !reset) {
             log.info("Found persisted credentials");
             String content = Files.readString(filePath);
             credentials = objectMapper.readValue(content, MqttCredentials.class);
         } else {
             log.info("Fetching credentials");
-            credentials = fetchMqttCredentials();
+            credentials = fetchMqttCredentials(reset);
 
             String json = objectMapper.writeValueAsString(credentials);
             Files.write(filePath, json.getBytes());
@@ -165,7 +165,7 @@ public class EcoflowClient {
         this.ecoflowProperties = ecoflowProperties;
         this.deviceService = deviceService;
 
-        initMqttClient();
+        initMqttClient(false);
         connect();
     }
 
@@ -176,6 +176,11 @@ public class EcoflowClient {
             mqttClient.subscribe(topic, messageListener);
         }
         mqttClient.setCallback(mqttCallback);
+    }
+
+    public void reset() throws MqttException, IOException {
+        disconnect();
+        initMqttClient(true);
     }
 
     public boolean isConnected() {
