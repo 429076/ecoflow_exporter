@@ -182,6 +182,7 @@ public class EcoflowClient {
         disconnect();
         initMqttClient(true);
         mqttClient.setCallback(mqttCallback);
+        mqttClient.connect();
     }
 
     public boolean isConnected() {
