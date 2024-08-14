@@ -79,8 +79,7 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
                     if(attempts == 6) {
                         try {
                             log.info("Attempting hard reset");
-                            ecoflowClient.reset();
-                            ecoflowClient.subscribe(this, this);
+                            ecoflowClient.reset(this);
                         } catch (Exception e) {
                             log.error("Unexpected error occurred while attempting to reset.", e);
                         }
