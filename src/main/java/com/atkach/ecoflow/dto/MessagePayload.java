@@ -9,6 +9,7 @@ public class MessagePayload {
     private String id;
     private String version;
     private String typeCode;
+    private String instructCode;
 
     private String cmdId;
     private String cmdFunc;
