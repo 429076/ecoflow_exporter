@@ -161,10 +161,10 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
                     log.error("Message without parameters {}", payloadString);
                 }
             } catch (Exception e) {
-                log.error("Unexpected error in subscriber " + payloadString, e);
+                log.error("Unexpected error in subscriber " + payloadString + ", topic " + topic, e);
             }
         } catch (Exception e) {
-            log.error("Unexpected error in subscriber", e);
+            log.error("Unexpected error in subscriber, topic " + topic, e);
         }
     }
 
