@@ -1,6 +1,7 @@
 package com.atkach.ecoflow.mqtt;
 
 import com.atkach.ecoflow.api.EcoflowClient;
+import com.atkach.ecoflow.api.dto.Device;
 import com.atkach.ecoflow.dto.MessagePayload;
 import com.atkach.ecoflow.mqtt.handlers.MetricsHandler;
 import com.atkach.ecoflow.properties.EcoflowProperties;
@@ -20,6 +21,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,8 +37,6 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     private final Pattern prometheusPattern = Pattern.compile("[a-zA-Z_:][a-zA-Z0-9_:]*");
     private final List<MetricsHandler> handlers;
-    private final AtomicInteger messagesFromLastCheck = new AtomicInteger(1);
-    private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
 
     @Getter
     private final ConcurrentHashMap<MetricCacheKey, MetricCacheValue> metricsCache = new ConcurrentHashMap<>();
@@ -55,56 +55,7 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
     @Scheduled(fixedDelay = 60000)
     public void checkDevicesForTimeout() {
         LocalDateTime now = LocalDateTime.now();
-        if (!ecoflowClient.isConnected()) {
-            log.warn("Connection lost, reconnecting.");
-            try {
-                meterRegistry.counter("ecoflow_mqtt_reconnects_total",
-                        Tags.of(
-                                Tag.of("type", "0")
-                        )).increment();
-                ecoflowClient.reconnect();
-            } catch (MqttException e) {
-                log.error("Unexpected error occurred while attempting to reconnect.", e);
-            }
-        } else {
-            var messages = messagesFromLastCheck.getAndSet(0);
-            if (messages < 1) {
-                log.warn("No messages for 1 minute, reconnecting.");
-                var attempts = reconnectAttempts.incrementAndGet();
-                if (attempts > 5) {
-                    log.error("Too many reconnect attempts");
-                    if(attempts == 6) {
-                        try {
-                            log.info("Attempting hard reset");
-                            ecoflowClient.reset(this);
-                        } catch (Exception e) {
-                            log.error("Unexpected error occurred while attempting to reset.", e);
-                        }
-                    }
-                } else {
-                    try {
-                        if (!ecoflowClient.isConnected()) {
-                            log.info("Connection lost, reconnecting.");
-                            meterRegistry.counter("ecoflow_mqtt_reconnects_total",
-                                    Tags.of(
-                                            Tag.of("type", "1")
-                                    )).increment();
-                            ecoflowClient.reconnect();
-                        } else {
-                            log.info("Reconnecting, soft reset");
-                            meterRegistry.counter("ecoflow_mqtt_reconnects_total",
-                                    Tags.of(
-                                            Tag.of("type", "2")
-                                    )).increment();
-                            ecoflowClient.disconnect();
-                            ecoflowClient.connect();
-                        }
-                    } catch (MqttException e) {
-                        log.error("Unexpected error occurred while attempting to reconnect.", e);
-                    }
-                }
-            }
-        }
+
         ecoflowClient.getDevices().forEach((sn, device) -> {
             Duration duration = Duration.between(device.getLastMessage(), now);
             if (duration.compareTo(ecoflowProperties.getOfflineTimeout()) > 0) {
@@ -150,58 +101,64 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
 
     @Override
     public void connectionLost(Throwable throwable) {
-        log.warn("Connection lost");
+        log.error("Connection lost");
+    }
+
+    protected void processParameters(Device device, Map<String, Object> params) {
+        params.forEach(
+                (p, v) -> {
+                    var name = ParsingUtils.reconcatenateCamelCase(p.replace(".", "_"), "_");
+
+                    if (!name.endsWith("_bytes") && !name.endsWith("_ver") && !name.endsWith("_sn")) {
+                        if (prometheusPattern.matcher(name).matches()) {
+                            boolean processed = false;
+                            for (MetricsHandler handler : handlers) {
+                                if (handler.canHandle(device, name, v)) {
+                                    List<MetricValue> metrics = handler.getMetrics(device, name, v);
+                                    for (MetricValue metric : metrics) {
+                                        var metricName = String.format("ecoflow_%s", metric.getMetricName());
+                                        var tags = Tags.of(
+                                                Stream.concat(
+                                                        Stream.of(Tag.of("device", device.getName())),
+                                                        metric.getTags().stream()
+                                                ).toList()
+                                        );
+                                        setGaugeValue(metricName, tags, metric.getValue());
+                                    }
+                                    processed = true;
+                                }
+                            }
+
+                            if (!processed) {
+                                log.warn("{} can not be processed, value: {}, type {}", name, v, v.getClass());
+                            }
+                        } else {
+                            log.warn("{} does not comply with prometheus name format", name);
+                        }
+                    }
+                }
+        );
     }
 
     @Override
     public void messageArrived(String topic, MqttMessage mqttMessage) {
         try {
-            messagesFromLastCheck.incrementAndGet();
-            reconnectAttempts.set(0);
             var payloadString = new String(mqttMessage.getPayload());
             try {
                 var payload = objectMapper.readValue(payloadString, MessagePayload.class);
+
+                var device = ecoflowClient.getDeviceByTopic(topic);
+                device.setLastMessage(LocalDateTime.now());
+                meterRegistry.counter("ecoflow_mqtt_messages_receive_total",
+                        Tags.of("device", device.getName())
+                ).increment();
+
                 if (Objects.nonNull(payload.getParams())) {
-                    var device = ecoflowClient.getDeviceByTopic(topic);
-
-                    device.setLastMessage(LocalDateTime.now());
-                    meterRegistry.counter("ecoflow_mqtt_messages_receive_total",
-                            Tags.of("device", device.getName())
-                    ).increment();
-
-                    payload.getParams().forEach(
-                            (p, v) -> {
-                                var name = ParsingUtils.reconcatenateCamelCase(p.replace(".", "_"), "_");
-
-                                if (!name.endsWith("_bytes") && !name.endsWith("_ver") && !name.endsWith("_sn")) {
-                                    if (prometheusPattern.matcher(name).matches()) {
-                                        boolean processed = false;
-                                        for (MetricsHandler handler : handlers) {
-                                            if (handler.canHandle(device, name, v)) {
-                                                List<MetricValue> metrics = handler.getMetrics(device, name, v);
-                                                for (MetricValue metric : metrics) {
-                                                    var metricName = String.format("ecoflow_%s", metric.getMetricName());
-                                                    var tags = Tags.of(
-                                                            Stream.concat(
-                                                                    Stream.of(Tag.of("device", device.getName())),
-                                                                    metric.getTags().stream()
-                                                            ).toList()
-                                                    );
-                                                    setGaugeValue(metricName, tags, metric.getValue());
-                                                }
-                                                processed = true;
-                                            }
-                                        }
-
-                                        if (!processed) {
-                                            log.warn("{} can not be processed, value: {}, type {}", name, v, v.getClass());
-                                        }
-                                    } else {
-                                        log.warn("{} does not comply with prometheus name format", name);
-                                    }
-                                }
-                            }
-                    );
+                    processParameters(device, payload.getParams());
+                } else if (Objects.nonNull(payload.getParam())) {
+                    processParameters(device, payload.getParam());
+                } else {
+                    log.error("Message without parameters {}", payloadString);
                 }
             } catch (Exception e) {
                 log.error("Unexpected error in subscriber " + payloadString, e);

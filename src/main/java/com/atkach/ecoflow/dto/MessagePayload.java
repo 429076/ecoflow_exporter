@@ -19,4 +19,5 @@ public class MessagePayload {
     private long time;
 
     private Map<String, Object> params;
+    private Map<String, Object> param;
 }
