@@ -1,6 +1,6 @@
 package com.atkach.ecoflow.mqtt.handlers;
 
-import com.atkach.ecoflow.devices.Device;
+import com.atkach.ecoflow.api.dto.Device;
 import com.atkach.ecoflow.mqtt.MetricValue;
 import io.micrometer.core.instrument.Tag;
 import org.springframework.stereotype.Component;

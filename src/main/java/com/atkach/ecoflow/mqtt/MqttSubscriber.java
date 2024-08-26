@@ -1,7 +1,6 @@
 package com.atkach.ecoflow.mqtt;
 
-import com.atkach.ecoflow.EcoflowClient;
-import com.atkach.ecoflow.devices.DeviceService;
+import com.atkach.ecoflow.api.EcoflowClient;
 import com.atkach.ecoflow.dto.MessagePayload;
 import com.atkach.ecoflow.mqtt.handlers.MetricsHandler;
 import com.atkach.ecoflow.properties.EcoflowProperties;
@@ -31,7 +30,6 @@ import java.util.stream.Stream;
 public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtended {
     private final EcoflowProperties ecoflowProperties;
     private final EcoflowClient ecoflowClient;
-    private final DeviceService deviceService;
     private final MeterRegistry meterRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     private final Pattern prometheusPattern = Pattern.compile("[a-zA-Z_:][a-zA-Z0-9_:]*");
@@ -42,10 +40,9 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
     @Getter
     private final ConcurrentHashMap<MetricCacheKey, MetricCacheValue> metricsCache = new ConcurrentHashMap<>();
 
-    public MqttSubscriber(EcoflowClient ecoflowClient, EcoflowProperties ecoflowProperties, DeviceService deviceService,
+    public MqttSubscriber(EcoflowClient ecoflowClient, EcoflowProperties ecoflowProperties,
                           MeterRegistry meterRegistry, List<MetricsHandler> handlers) throws MqttException {
         this.ecoflowProperties = ecoflowProperties;
-        this.deviceService = deviceService;
         this.meterRegistry = meterRegistry;
         this.handlers = handlers;
         this.ecoflowClient = ecoflowClient;
@@ -97,7 +94,7 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
                 }
             }
         }
-        deviceService.getDevices().forEach((sn, device) -> {
+        ecoflowClient.getDevices().forEach((sn, device) -> {
             Duration duration = Duration.between(device.getLastMessage(), now);
             if (duration.compareTo(ecoflowProperties.getOfflineTimeout()) > 0) {
                 log.debug("Device '{}' with sn '{}' has not sent a message for {}", device.getName(), sn, duration);
@@ -154,7 +151,7 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
             try {
                 var payload = objectMapper.readValue(payloadString, MessagePayload.class);
                 if (Objects.nonNull(payload.getParams())) {
-                    var device = deviceService.getDeviceByTopic(topic);
+                    var device = ecoflowClient.getDeviceByTopic(topic);
 
                     device.setLastMessage(LocalDateTime.now());
                     meterRegistry.counter("ecoflow_mqtt_messages_receive_total",

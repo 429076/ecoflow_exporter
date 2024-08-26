@@ -1,4 +1,4 @@
-package com.atkach.ecoflow.devices;
+package com.atkach.ecoflow.api.dto;
 
 import lombok.Data;
 

@@ -10,16 +10,14 @@ import java.time.Duration;
 @Component
 @ConfigurationProperties(prefix = "ecoflow")
 public class EcoflowProperties {
-    private String data;
     private Api api;
     private Duration offlineTimeout;
     private Duration offgridTimeout;
-    private String devices;
 
     @Data
     public static class Api {
         private String host;
-        private String email;
-        private String password;
+        private String accessKey;
+        private String secret;
     }
 }

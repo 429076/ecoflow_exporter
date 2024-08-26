@@ -1,4 +1,4 @@
-package com.atkach.ecoflow.dto.cert;
+package com.atkach.ecoflow.dto.data;
 
 import lombok.Data;
 

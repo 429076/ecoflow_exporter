@@ -6,12 +6,17 @@ import java.util.Map;
 
 @Data
 public class MessagePayload {
-    private String addr;
-    private String cmdFunc;
-    private String cmdId;
     private String id;
     private String version;
-    private String timestamp;
-    private String moduleType;
+    private String typeCode;
+
+    private String cmdId;
+    private String cmdFunc;
+    private String addr;
+
+    private int moduleType;
+    private int needAck;
+    private long time;
+
     private Map<String, Object> params;
 }

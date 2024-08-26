@@ -3,14 +3,12 @@ spring:
     name: exporter
 
 ecoflow:
-  data: /data
   api:
-    host: api.ecoflow.com
-    email: ${ECOFLOW_USERNAME}
-    password: ${ECOFLOW_PASSWORD}
+    host: api-e.ecoflow.com
+    accessKey: ${ECOFLOW_ACCESS_KEY}
+    secret: ${ECOFLOW_SECRET}
   offlineTimeout: PT1m
   offgridTimeout: PT1m
-  devices: ${ECOFLOW_DEVICES}
 
 httpClient:
   timeout:
