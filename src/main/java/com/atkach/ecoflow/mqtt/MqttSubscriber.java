@@ -16,6 +16,7 @@ import org.springframework.data.util.ParsingUtils;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -72,15 +73,25 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
                 var attempts = reconnectAttempts.incrementAndGet();
                 if (attempts > 5) {
                     log.error("Too many reconnect attempts");
+                    if(attempts == 6) {
+                        try {
+                            log.info("Attempting hard reset");
+                            ecoflowClient.reset(this);
+                        } catch (Exception e) {
+                            log.error("Unexpected error occurred while attempting to reset.", e);
+                        }
+                    }
                 } else {
                     try {
                         if (!ecoflowClient.isConnected()) {
+                            log.info("Connection lost, reconnecting.");
                             meterRegistry.counter("ecoflow_mqtt_reconnects_total",
                                     Tags.of(
                                             Tag.of("type", "1")
                                     )).increment();
                             ecoflowClient.reconnect();
                         } else {
+                            log.info("Reconnecting, soft reset");
                             meterRegistry.counter("ecoflow_mqtt_reconnects_total",
                                     Tags.of(
                                             Tag.of("type", "2")
