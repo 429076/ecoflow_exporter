@@ -72,7 +72,7 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
         });
 
         metricsCache.forEach((key, value) -> {
-            if ("ecoflow_inv_ac_in_vol".equals(key.getName())) {
+            if ("ecoflow_inv_status_ac_in_vol".equals(key.getName())) {
                 if (Duration.between(value.getLastUpdateTime(), LocalDateTime.now())
                         .compareTo(ecoflowProperties.getOffgridTimeout()) > 0) {
                     setGaugeValue("ecoflow_offgrid",
