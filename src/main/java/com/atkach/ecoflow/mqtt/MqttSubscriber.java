@@ -7,6 +7,7 @@ import com.atkach.ecoflow.mqtt.handlers.MetricsHandler;
 import com.atkach.ecoflow.properties.EcoflowProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.micrometer.common.util.StringUtils;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
@@ -104,10 +105,12 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
         log.error("Connection lost");
     }
 
-    protected void processParameters(Device device, Map<String, Object> params) {
+    protected void processParameters(Device device, String prefix, Map<String, Object> params) {
         params.forEach(
                 (p, v) -> {
-                    var name = ParsingUtils.reconcatenateCamelCase(p.replace(".", "_"), "_");
+                    var fullName = StringUtils.isNotBlank(prefix) ?
+                            String.format("%s_%s", prefix, p) : p;
+                    var name = ParsingUtils.reconcatenateCamelCase(fullName, "_");
 
                     if (!name.endsWith("_bytes") && !name.endsWith("_ver") && !name.endsWith("_sn")) {
                         if (prometheusPattern.matcher(name).matches()) {
@@ -154,9 +157,9 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
                 ).increment();
 
                 if (Objects.nonNull(payload.getParams())) {
-                    processParameters(device, payload.getParams());
+                    processParameters(device, payload.getTypeCode(), payload.getParams());
                 } else if (Objects.nonNull(payload.getParam())) {
-                    processParameters(device, payload.getParam());
+                    processParameters(device, payload.getTypeCode(), payload.getParam());
                 } else {
                     log.error("Message without parameters {}", payloadString);
                 }
