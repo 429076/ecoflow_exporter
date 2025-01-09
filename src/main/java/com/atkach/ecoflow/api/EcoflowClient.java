@@ -103,6 +103,16 @@ public class EcoflowClient {
                         d -> new Device(d.getDeviceName(), d.getSn())
                 ));
 
+        log.info(
+                "Devices found: \n{}",
+                devices.values().stream()
+                        .map(
+                                device -> String.format(
+                                        "Device %s, sn %s", device.getName(), device.getSn()
+                                )
+                        ).collect(Collectors.joining("\n"))
+        );
+
         initMqttClient();
         connect();
     }
@@ -112,6 +122,7 @@ public class EcoflowClient {
         topics = new HashMap<>();
         for (Device d : devices.values()) {
             var topic = String.format(TOPIC_TMPL, connectOptions.getUserName(), d.getSn());
+            log.info("Subscribing to topic {}", topic);
             topics.put(topic, d);
             mqttClient.subscribe(topic, messageListener);
         }

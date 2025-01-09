@@ -8,7 +8,7 @@ ecoflow:
     accessKey: ${ECOFLOW_ACCESS_KEY}
     secret: ${ECOFLOW_SECRET}
   offlineTimeout: PT1m
-  offgridTimeout: PT1m
+  offgridTimeout: PT5m
 
 httpClient:
   timeout:
