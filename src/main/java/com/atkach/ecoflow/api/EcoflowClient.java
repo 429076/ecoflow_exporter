@@ -97,7 +97,17 @@ public class EcoflowClient {
         this.restTemplate = restTemplate;
         this.ecoflowProperties = ecoflowProperties;
 
-        this.devices = requestDeviceList().getData().stream()
+        var devicesResponse = requestDeviceList();
+
+        if (devicesResponse.getCode() != 0) {
+            log.error("Error getting devices: [{}] {}", devicesResponse.getCode(), devicesResponse.getMessage());
+            if (devicesResponse.getCode() == 8521 || devicesResponse.getCode() == 8513) {
+                log.info("Check your access key \"{}\" and secret \"{}\"", ecoflowProperties.getApi().getAccessKey(), ecoflowProperties.getApi().getSecret());
+            }
+            throw new IllegalStateException("Error getting devices");
+        }
+
+        this.devices = devicesResponse.getData().stream()
                 .collect(Collectors.toMap(
                         DeviceListResponseData::getSn,
                         d -> new Device(d.getDeviceName(), d.getSn())
