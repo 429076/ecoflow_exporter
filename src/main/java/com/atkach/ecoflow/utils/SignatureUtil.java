@@ -39,7 +39,7 @@ public class SignatureUtil {
             Object body) throws Exception {
 
         var timestamp = String.format("%d",
-                ZonedDateTime.now(ZoneId.of("UTC")).toInstant().toEpochMilli());
+                System.currentTimeMillis());
         var nonce = String.format("%06d",
                 SecureRandom.getInstanceStrong().nextInt(1000000));
         return generateSignature(accessKey, secret, timestamp, nonce, uriVariables, body);
