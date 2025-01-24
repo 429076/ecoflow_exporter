@@ -9,15 +9,14 @@ import com.atkach.ecoflow.dto.data.DeviceListResponseData;
 import com.atkach.ecoflow.properties.EcoflowProperties;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
-import org.apache.commons.lang3.StringUtils;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -33,6 +32,7 @@ public class EcoflowClient {
     private Map<String, Device> devices;
     @Getter
     private Map<String, Device> topics;
+    private String zoneId;
 
     private MqttClient mqttClient;
     private MqttConnectOptions connectOptions;
@@ -46,11 +46,14 @@ public class EcoflowClient {
     }
 
     protected <T extends AbstractResponse> T performGet(
+            List<String> signatureLogs,
             String url,
             Class<T> responseType,
             Map<String, ?> uriVariables
     ) throws Exception {
         HttpEntity<Void> requestEntity = new HttpEntity<>(generateSignature(
+                signatureLogs,
+                zoneId,
                 ecoflowProperties.getApi().getAccessKey(),
                 ecoflowProperties.getApi().getSecret(),
                 uriVariables, null));
@@ -60,11 +63,11 @@ public class EcoflowClient {
     }
 
     protected AppCertificateResponse requestMqttCertificate() throws Exception {
-        return performGet(generateAppCertificationUrl(), AppCertificateResponse.class, Collections.emptyMap());
+        return performGet(null, generateAppCertificationUrl(), AppCertificateResponse.class, Collections.emptyMap());
     }
 
-    protected DeviceListResponse requestDeviceList() throws Exception {
-        return performGet(generateDeviceListUrl(), DeviceListResponse.class, Collections.emptyMap());
+    protected DeviceListResponse requestDeviceList(List<String> signatureLogs) throws Exception {
+        return performGet(signatureLogs, generateDeviceListUrl(), DeviceListResponse.class, Collections.emptyMap());
     }
 
     protected MqttCredentials fetchMqttCredentials() throws Exception {
@@ -93,16 +96,23 @@ public class EcoflowClient {
         connectOptions.setConnectionTimeout(10);
     }
 
-    public EcoflowClient(RestTemplate restTemplate, EcoflowProperties ecoflowProperties) throws Exception {
+    public EcoflowClient(
+            RestTemplate restTemplate,
+            EcoflowProperties ecoflowProperties,
+            @Value("${ecoflow.zoneId}")
+            String zoneId) throws Exception {
+        this.zoneId = zoneId;
         this.restTemplate = restTemplate;
         this.ecoflowProperties = ecoflowProperties;
 
-        var devicesResponse = requestDeviceList();
+        var signatureLogs = new ArrayList<String>();
+        var devicesResponse = requestDeviceList(signatureLogs);
 
         if (devicesResponse.getCode() != 0) {
             log.error("Error getting devices: [{}] {}", devicesResponse.getCode(), devicesResponse.getMessage());
             if (devicesResponse.getCode() == 8521 || devicesResponse.getCode() == 8513) {
                 log.info("Check your access key \"{}\" and secret \"{}\"", ecoflowProperties.getApi().getAccessKey(), ecoflowProperties.getApi().getSecret());
+                log.info("Signature generation details:\n{}", String.join("\n", signatureLogs));
             }
             throw new IllegalStateException("Error getting devices");
         }

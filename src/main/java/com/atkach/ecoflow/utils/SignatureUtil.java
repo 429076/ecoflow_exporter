@@ -8,10 +8,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.Formatter;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TreeMap;
+import java.util.*;
 
 public class SignatureUtil {
     private static byte[] hmacSha256Hex(String key, String data) throws Exception {
@@ -33,19 +30,24 @@ public class SignatureUtil {
     }
 
     public static HttpHeaders generateSignature(
+            List<String> signatureLogs,
+            String zoneId,
             String accessKey,
             String secret,
             Map<String, ?> uriVariables,
             Object body) throws Exception {
 
         var timestamp = String.format("%d",
-                System.currentTimeMillis());
+                ZonedDateTime.now(ZoneId.of(zoneId)).toInstant().toEpochMilli());
+        if (signatureLogs != null) signatureLogs.add(timestamp);
         var nonce = String.format("%06d",
                 SecureRandom.getInstanceStrong().nextInt(1000000));
-        return generateSignature(accessKey, secret, timestamp, nonce, uriVariables, body);
+        if (signatureLogs != null) signatureLogs.add(nonce);
+        return generateSignature(signatureLogs, accessKey, secret, timestamp, nonce, uriVariables, body);
     }
 
     public static HttpHeaders generateSignature(
+            List<String> signatureLogs,
             String accessKey,
             String secret,
             String timestamp,
@@ -74,7 +76,11 @@ public class SignatureUtil {
                         String.format("%s&accessKey=%s&nonce=%s&timestamp=%s", parametersString, accessKey, nonce, timestamp) :
                         String.format("accessKey=%s&nonce=%s&timestamp=%s", accessKey, nonce, timestamp);
 
+        if (signatureLogs != null) signatureLogs.add(stringToSign);
+
         var sign = toHexString(hmacSha256Hex(secret, stringToSign));
+
+        if (signatureLogs != null) signatureLogs.add(sign);
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("accessKey", accessKey);

@@ -10,6 +10,7 @@ Parameters:
 
 ```bash
 docker run -p 8080:8080 -it \
+-e ECOFLOW_API_ZONE_ID=<timezone for timestamp used in ecoflow API signature: UTC+5> \
 -e ECOFLOW_ACCESS_KEY=<ecoflow developer access key> \
 -e ECOFLOW_SECRET=<ecoflow developer secret> \
 --name ecoflow_exporter \

@@ -35,6 +35,7 @@ public class SignatureUtilTest {
     @Test
     public void testSignature() throws Exception {
         var headers = SignatureUtil.generateSignature(
+                null,
                 "Fp4SvIprYSDPXtYJidEtUAd1o",
                 "WIbFEKre0s6sLnh4ei7SPUeYnptHG6V",
                 "1671171709428",

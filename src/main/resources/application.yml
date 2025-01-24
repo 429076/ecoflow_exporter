@@ -3,6 +3,7 @@ spring:
     name: exporter
 
 ecoflow:
+  zoneId: ${ECOFLOW_API_ZONE_ID}
   api:
     host: api-e.ecoflow.com
     accessKey: ${ECOFLOW_ACCESS_KEY}
