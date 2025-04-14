@@ -221,7 +221,8 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
                                                     return e.getKey();
                                                 }
                                             },
-                                            Map.Entry::getValue
+                                            Map.Entry::getValue,
+                                            (v1, v2) -> v1
                                     )
                             )
             );
