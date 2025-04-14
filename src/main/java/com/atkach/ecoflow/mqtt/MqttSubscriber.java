@@ -2,6 +2,7 @@ package com.atkach.ecoflow.mqtt;
 
 import com.atkach.ecoflow.api.EcoflowClient;
 import com.atkach.ecoflow.api.dto.Device;
+import com.atkach.ecoflow.dto.DeviceQuotaResponse;
 import com.atkach.ecoflow.dto.MessagePayload;
 import com.atkach.ecoflow.mqtt.handlers.MetricsHandler;
 import com.atkach.ecoflow.properties.EcoflowProperties;
@@ -27,6 +28,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Log4j2
@@ -61,9 +63,23 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
             Duration duration = Duration.between(device.getLastMessage(), now);
             if (duration.compareTo(ecoflowProperties.getOfflineTimeout()) > 0) {
                 log.debug("Device '{}' with sn '{}' has not sent a message for {}", device.getName(), sn, duration);
-                setGaugeValue("ecoflow_online",
-                        Tags.of("device", device.getName()),
-                        0);
+
+                DeviceQuotaResponse r = null;
+                try {
+                    r = ecoflowClient.requestDeviceQuota(null, device.getSn());
+                } catch (Exception e) {
+                    log.error("Error getting device quota for device '{}' with sn '{}': {}",
+                            device.getName(), device.getSn(), e.getMessage());
+                    r = null;
+                }
+
+                if (Objects.nonNull(r)) {
+                    processMessage(device, r);
+                } else {
+                    setGaugeValue("ecoflow_online",
+                            Tags.of("device", device.getName()),
+                            0);
+                }
             } else {
                 setGaugeValue("ecoflow_online",
                         Tags.of("device", device.getName()),
@@ -108,8 +124,9 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
     protected void processParameters(Device device, String prefix, Map<String, Object> params) {
         params.forEach(
                 (p, v) -> {
+                    var key = p.replaceAll("\\.", "_");
                     var fullName = StringUtils.isNotBlank(prefix) ?
-                            String.format("%s_%s", prefix, p) : p;
+                            String.format("%s_%s", prefix, key) : key;
                     var name = ParsingUtils.reconcatenateCamelCase(fullName, "_");
 
                     if (!name.endsWith("_bytes") && !name.endsWith("_ver") && !name.endsWith("_sn")) {
@@ -149,25 +166,67 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
             var payloadString = new String(mqttMessage.getPayload());
             try {
                 var payload = objectMapper.readValue(payloadString, MessagePayload.class);
-
                 var device = ecoflowClient.getDeviceByTopic(topic);
-                device.setLastMessage(LocalDateTime.now());
-                meterRegistry.counter("ecoflow_mqtt_messages_receive_total",
-                        Tags.of("device", device.getName())
-                ).increment();
 
-                if (Objects.nonNull(payload.getParams())) {
-                    processParameters(device, payload.getTypeCode(), payload.getParams());
-                } else if (Objects.nonNull(payload.getParam())) {
-                    processParameters(device, payload.getTypeCode(), payload.getParam());
-                } else {
-                    log.error("Message without parameters {}", payloadString);
-                }
+                processMessage(device, payload);
             } catch (Exception e) {
                 log.error("Unexpected error in subscriber " + payloadString + ", topic " + topic, e);
             }
         } catch (Exception e) {
             log.error("Unexpected error in subscriber, topic " + topic, e);
+        }
+    }
+
+    protected void processMessage(Device device, MessagePayload payload) {
+        device.setLastMessage(LocalDateTime.now());
+        meterRegistry.counter("ecoflow_mqtt_messages_receive_total",
+                Tags.of("device", device.getName())
+        ).increment();
+
+        if (Objects.nonNull(payload.getParams())) {
+            processParameters(device, payload.getTypeCode(), payload.getParams());
+        } else if (Objects.nonNull(payload.getParam())) {
+            processParameters(device, payload.getTypeCode(), payload.getParam());
+        } else {
+            log.error("Message without parameters {}", device.getSn());
+        }
+    }
+
+    protected void processMessage(Device device, DeviceQuotaResponse quotaResponse) {
+        device.setLastMessage(LocalDateTime.now());
+        meterRegistry.counter("ecoflow_mqtt_messages_receive_total",
+                Tags.of("device", device.getName())
+        ).increment();
+
+        if (Objects.nonNull(quotaResponse.getData())) {
+            processParameters(device, null,
+                    quotaResponse.getData().entrySet()
+                            .stream()
+                            .collect(
+                                    Collectors.toMap(
+                                            e -> {
+                                                if (e.getKey().startsWith("bms_")) {
+                                                    return e.getKey().substring(4);
+                                                } else if(e.getKey().startsWith("inv.")) {
+                                                    return "invStatus." + e.getKey().substring(4);
+                                                } else if(e.getKey().startsWith("mppt.")) {
+                                                    return "mpptStatus." + e.getKey().substring(5);
+                                                } else if(e.getKey().startsWith("pd.")) {
+                                                    return "pdStatus." + e.getKey().substring(3);
+                                                } else if(e.getKey().startsWith("2_1.")) {
+                                                    return e.getKey().substring(4);
+                                                } else if(e.getKey().startsWith("2_2.")) {
+                                                    return e.getKey().substring(4);
+                                                } else {
+                                                    return e.getKey();
+                                                }
+                                            },
+                                            Map.Entry::getValue
+                                    )
+                            )
+            );
+        } else {
+            log.error("Quota response without data {}", device.getSn());
         }
     }
 

@@ -1,10 +1,7 @@
 package com.atkach.ecoflow.api;
 
 import com.atkach.ecoflow.api.dto.Device;
-import com.atkach.ecoflow.dto.AbstractResponse;
-import com.atkach.ecoflow.dto.AppCertificateResponse;
-import com.atkach.ecoflow.dto.DeviceListResponse;
-import com.atkach.ecoflow.dto.MqttCredentials;
+import com.atkach.ecoflow.dto.*;
 import com.atkach.ecoflow.dto.data.DeviceListResponseData;
 import com.atkach.ecoflow.properties.EcoflowProperties;
 import lombok.Getter;
@@ -45,6 +42,10 @@ public class EcoflowClient {
         return String.format("https://%s/iot-open/sign/device/list", ecoflowProperties.getApi().getHost());
     }
 
+    protected String generateDeviceQuotaUrl() {
+        return String.format("https://%s/iot-open/sign/device/quota/all?sn={sn}", ecoflowProperties.getApi().getHost());
+    }
+
     protected <T extends AbstractResponse> T performGet(
             List<String> signatureLogs,
             String url,
@@ -68,6 +69,10 @@ public class EcoflowClient {
 
     protected DeviceListResponse requestDeviceList(List<String> signatureLogs) throws Exception {
         return performGet(signatureLogs, generateDeviceListUrl(), DeviceListResponse.class, Collections.emptyMap());
+    }
+
+    public DeviceQuotaResponse requestDeviceQuota(List<String> signatureLogs, String sn) throws Exception {
+        return performGet(signatureLogs, generateDeviceQuotaUrl(), DeviceQuotaResponse.class, Map.of("sn", sn));
     }
 
     protected MqttCredentials fetchMqttCredentials() throws Exception {
