@@ -150,7 +150,7 @@ public class MqttSubscriber implements IMqttMessageListener, MqttCallbackExtende
                             }
 
                             if (!processed) {
-                                log.warn("{} can not be processed, value: {}, type {}", name, v, v.getClass());
+                                log.debug("{} can not be processed, value: {}, type {}", name, v, v.getClass());
                             }
                         } else {
                             log.warn("{} does not comply with prometheus name format", name);
